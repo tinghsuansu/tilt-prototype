@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,16 +18,46 @@
             width: 100vw;
             height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
 
         .container {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            overflow: hidden;
+        }
+
+        .widgets-wrapper {
+            width: 100vw;
+            overflow-x: auto;
+            overflow-y: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .widgets-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .widgets-wrapper {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .widgets-inner {
+            display: flex;
+            position: relative;
+            transition: transform 1s ease-out;
         }
 
         .top-bar {
@@ -66,7 +97,7 @@
             gap: 0;
             position: relative;
             transition: all 1s ease-out;
-            transform: translateX(0);
+            flex-shrink: 0;
         }
 
         .widget {
@@ -257,18 +288,22 @@
     <div class="container" id="container">
         <div class="top-bar">Top Bar</div>
         
-        <div class="widgets-container" id="widgetsContainer">
-            <div class="widget" id="widget1">
-                <span>Widget<br>1</span>
-            </div>
-            <div class="widget" id="widget2">
-                <span>Widget<br>2</span>
-            </div>
-            <div class="widget" id="widget3">
-                <span>Widget<br>3</span>
-            </div>
-            <div class="widget widget-4" id="widget4">
-                <span>Widget<br>4</span>
+        <div class="widgets-wrapper" id="widgetsWrapper">
+            <div class="widgets-inner" id="widgetsInner">
+                <div class="widgets-container" id="widgetsContainer">
+                    <div class="widget" id="widget1">
+                        <span>Widget<br>1</span>
+                    </div>
+                    <div class="widget" id="widget2">
+                        <span>Widget<br>2</span>
+                    </div>
+                    <div class="widget" id="widget3">
+                        <span>Widget<br>3</span>
+                    </div>
+                    <div class="widget widget-4" id="widget4">
+                        <span>Widget<br>4</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -282,6 +317,8 @@
         const widget3 = document.getElementById('widget3');
         const widget4 = document.getElementById('widget4');
         const widgetsContainer = document.getElementById('widgetsContainer');
+        const widgetsWrapper = document.getElementById('widgetsWrapper');
+        const widgetsInner = document.getElementById('widgetsInner');
         const debug = document.getElementById('debug');
         const permissionRequest = document.getElementById('permissionRequest');
         const enableBtn = document.getElementById('enableBtn');
@@ -327,10 +364,43 @@
                 widget.style.height = `${widgetHeight}px`;
             });
 
-            // Calculate the left translation for widgets container
-            // When widget 4 comes in, widgets 1, 2, 3 should move left by the width of widget 4
-            const leftShift = -widgetWidth * progress;
-            widgetsContainer.style.transform = `translateX(${leftShift}px)`;
+            const viewportWidth = window.innerWidth;
+            
+            // Calculate positioning based on state
+            if (progress === 0) {
+                // FLAT STATE: Only 3 widgets visible and centered
+                const threeWidgetsWidth = widgetWidth * 3;
+                widgetsWrapper.style.overflowX = 'hidden';
+                widgetsContainer.style.width = `${threeWidgetsWidth}px`;
+                widgetsInner.style.transform = 'translateX(0)';
+            } else {
+                // TRANSITIONING/UPRIGHT STATE: 4 widgets visible
+                const threeWidgetsWidth = widgetWidth * 3;
+                const fourWidgetsWidth = widgetWidth * 4;
+                widgetsContainer.style.width = `${fourWidgetsWidth}px`;
+                
+                if (fourWidgetsWidth <= viewportWidth) {
+                    // All 4 widgets fit: keep centered
+                    widgetsWrapper.style.overflowX = 'hidden';
+                    widgetsInner.style.transform = 'translateX(0)';
+                } else {
+                    // Widgets don't fit: enable scrolling and slide to left
+                    widgetsWrapper.style.overflowX = 'auto';
+                    
+                    // Calculate the shift needed
+                    // When flat (3 widgets), they are centered: offset = (viewport - 3*width) / 2
+                    // When upright (4 widgets), widget 1 should be at left edge: offset = 0
+                    // The maximum shift is from centered position to left edge
+                    
+                    const threeWidgetsCenteredOffset = (viewportWidth - threeWidgetsWidth) / 2;
+                    
+                    // As widget 4 slides in, we need to shift left, but not beyond left edge
+                    // Maximum shift is limited to threeWidgetsCenteredOffset (to reach left edge)
+                    const targetShift = -threeWidgetsCenteredOffset * progress;
+                    
+                    widgetsInner.style.transform = `translateX(${targetShift}px)`;
+                }
+            }
 
             // Toggle tilted class for bars and widget 4
             if (progress > 0) {
@@ -368,31 +438,45 @@
                 sensorStatus.className = 'sensor-status success';
             }
             
-            // Beta is the front-to-back tilt in degrees
-            let beta = event.beta;
-            let gamma = event.gamma;
-            let alpha = event.alpha;
+            // Get orientation values
+            let beta = event.beta;   // Front-to-back tilt (-180 to 180)
+            let gamma = event.gamma; // Left-to-right tilt (-90 to 90)
+            let alpha = event.alpha; // Compass direction (0 to 360)
 
             // Handle null values
-            if (beta === null || beta === undefined) {
+            if (beta === null || beta === undefined || gamma === null || gamma === undefined) {
                 sensorStatus.textContent = '✗ Sensor returning null';
                 sensorStatus.className = 'sensor-status error';
                 return;
             }
 
-            // Normalize beta to positive values
-            beta = Math.abs(beta);
+            // Detect if phone is in portrait or landscape orientation
+            const isLandscape = window.matchMedia("(orientation: landscape)").matches;
             
-            // Adjust for different orientations
-            if (beta > 90) {
-                beta = 180 - beta;
+            let tiltAngle;
+            
+            if (isLandscape) {
+                // In landscape mode, use gamma (left-right tilt becomes front-back)
+                // When phone is flat on table: gamma ≈ 0
+                // When phone is upright in landscape: gamma ≈ ±90
+                tiltAngle = Math.abs(gamma);
+            } else {
+                // In portrait mode, use beta (front-back tilt)
+                // When phone is flat: beta ≈ 0
+                // When phone is upright: beta ≈ 90
+                tiltAngle = Math.abs(beta);
+                
+                // Adjust for different orientations
+                if (tiltAngle > 90) {
+                    tiltAngle = 180 - tiltAngle;
+                }
             }
 
             // Update debug
-            document.getElementById('betaValue').textContent = beta.toFixed(1);
+            document.getElementById('betaValue').textContent = tiltAngle.toFixed(1);
 
             // Calculate progress based on angle range
-            const progress = calculateProgress(beta);
+            const progress = calculateProgress(tiltAngle);
             updateUI(progress);
         }
 
@@ -564,6 +648,24 @@
                 }
             }
         }, 1000);
+
+        // Listen for orientation changes (portrait/landscape)
+        window.addEventListener('orientationchange', () => {
+            // Give the browser time to update the orientation
+            setTimeout(() => {
+                if (!manualMode && sensorActive) {
+                    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+                    console.log('Orientation changed to:', isLandscape ? 'landscape' : 'portrait');
+                }
+                // Recalculate widget positioning for new viewport size
+                updateUI(currentProgress);
+            }, 100);
+        });
+
+        // Listen for window resize to recalculate positioning
+        window.addEventListener('resize', () => {
+            updateUI(currentProgress);
+        });
     </script>
 </body>
 </html>

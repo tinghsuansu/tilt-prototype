@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tilt Prototype</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: #c0c0c0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #666;
+            transform: translateY(-100%);
+            transition: transform 1s ease-out;
+        }
+
+        .nav-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: #c0c0c0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: #666;
+            transform: translateY(100%);
+            transition: transform 1s ease-out;
+        }
+
+        .widgets-container {
+            display: flex;
+            gap: 0;
+            position: relative;
+            transition: all 1s ease-out;
+            transform: translateX(0);
+        }
+
+        .widget {
+            background-color: #d3d3d3;
+            border: 2px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #888;
+            transition: all 1s ease-out;
+            flex-shrink: 0;
+        }
+
+        .widget-4 {
+            position: absolute;
+            left: 300px; /* Position it after the 3 widgets (100px * 3) */
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 1s ease-out;
+        }
+
+        /* State classes */
+        .tilted .top-bar {
+            transform: translateY(0);
+        }
+
+        .tilted .nav-bar {
+            transform: translateY(0);
+        }
+
+        .tilted .widget-4 {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        /* Debug info */
+        .debug {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 1000;
+            display: none;
+        }
+
+        .permission-request {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 2000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .permission-request button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 16px;
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .permission-request button:active {
+            background: #0051d5;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .manual-controls {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 1500;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .manual-controls input[type="range"] {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .manual-controls button {
+            margin: 5px;
+            padding: 10px 20px;
+            font-size: 14px;
+            background: #007aff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .manual-controls button:active {
+            background: #0051d5;
+        }
+
+        .sensor-status {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+        }
+
+        .sensor-status.error {
+            color: #ff3b30;
+        }
+
+        .sensor-status.success {
+            color: #34c759;
+        }
+
+        .reopen-control-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            background: #007aff;
+            color: white;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1400;
+            display: none;
+        }
+
+        .reopen-control-btn:active {
+            background: #0051d5;
+        }
+    </style>
+</head>
+<body>
+    <div class="permission-request" id="permissionRequest">
+        <h2>Enable Device Orientation</h2>
+        <p>This prototype needs access to your device's orientation sensor.</p>
+        <p style="font-size: 12px; color: #666; margin-top: 10px;">Note: Chrome requires HTTPS for sensor access</p>
+        <button id="enableBtn">Enable Sensors</button>
+        <button id="manualBtn" style="background: #5856d6; margin-top: 10px;">Use Manual Control</button>
+    </div>
+
+    <div class="debug" id="debug">
+        Beta: <span id="betaValue">0</span>°<br>
+        Progress: <span id="progressValue">0</span>%<br>
+        State: <span id="stateValue">flat</span><br>
+        <span id="sensorStatus" class="sensor-status"></span>
+    </div>
+
+    <div class="manual-controls hidden" id="manualControls">
+        <div style="font-weight: bold; margin-bottom: 10px;" id="controlTitle">Manual Control</div>
+        <div id="manualControlsContent">
+            <div>Angle: <span id="manualAngle">0</span>°</div>
+            <input type="range" id="angleSlider" min="0" max="90" value="0" step="1">
+            <div style="font-size: 12px; color: #666; margin: 10px 0;">
+                Drag slider: 0° (flat) → 90° (upright)
+            </div>
+        </div>
+        <div id="modeSwitchButtons">
+            <button id="switchToSensorBtn" style="background: #34c759;">Switch to Sensor Mode</button>
+            <button id="switchToManualBtn" style="background: #5856d6; display: none;">Switch to Manual Mode</button>
+        </div>
+        <button id="closeManualBtn" style="background: #ff3b30; margin-top: 5px;">Hide Controls</button>
+    </div>
+
+    <button class="reopen-control-btn" id="reopenControlBtn">⚙️</button>
+
+    <div class="container" id="container">
+        <div class="top-bar">Top Bar</div>
+        
+        <div class="widgets-container" id="widgetsContainer">
+            <div class="widget" id="widget1">
+                <span>Widget<br>1</span>
+            </div>
+            <div class="widget" id="widget2">
+                <span>Widget<br>2</span>
+            </div>
+            <div class="widget" id="widget3">
+                <span>Widget<br>3</span>
+            </div>
+            <div class="widget widget-4" id="widget4">
+                <span>Widget<br>4</span>
+            </div>
+        </div>
+
+        <div class="nav-bar">Nav Bar</div>
+    </div>
+
+    <script>
+        const container = document.getElementById('container');
+        const widget1 = document.getElementById('widget1');
+        const widget2 = document.getElementById('widget2');
+        const widget3 = document.getElementById('widget3');
+        const widget4 = document.getElementById('widget4');
+        const widgetsContainer = document.getElementById('widgetsContainer');
+        const debug = document.getElementById('debug');
+        const permissionRequest = document.getElementById('permissionRequest');
+        const enableBtn = document.getElementById('enableBtn');
+        const manualBtn = document.getElementById('manualBtn');
+        const manualControls = document.getElementById('manualControls');
+        const angleSlider = document.getElementById('angleSlider');
+        const manualAngle = document.getElementById('manualAngle');
+        const switchToSensorBtn = document.getElementById('switchToSensorBtn');
+        const switchToManualBtn = document.getElementById('switchToManualBtn');
+        const closeManualBtn = document.getElementById('closeManualBtn');
+        const sensorStatus = document.getElementById('sensorStatus');
+        const reopenControlBtn = document.getElementById('reopenControlBtn');
+        const controlTitle = document.getElementById('controlTitle');
+        const manualControlsContent = document.getElementById('manualControlsContent');
+
+        // Widget dimensions
+        const FLAT_WIDTH = 100;
+        const FLAT_HEIGHT = 100;
+        const UPRIGHT_WIDTH = 100;
+        const UPRIGHT_HEIGHT = 200;
+
+        // Tilt thresholds (in degrees)
+        const START_ANGLE = 30;
+        const END_ANGLE = 60;
+
+        let currentProgress = 0;
+        let sensorActive = false;
+        let manualMode = false;
+        let lastEventTime = 0;
+
+        function updateUI(progress) {
+            // Clamp progress between 0 and 1
+            progress = Math.max(0, Math.min(1, progress));
+            currentProgress = progress;
+
+            // Calculate widget dimensions
+            const widgetHeight = FLAT_HEIGHT + (UPRIGHT_HEIGHT - FLAT_HEIGHT) * progress;
+            const widgetWidth = FLAT_WIDTH;
+
+            // Update widgets 1, 2, 3, 4
+            [widget1, widget2, widget3, widget4].forEach(widget => {
+                widget.style.width = `${widgetWidth}px`;
+                widget.style.height = `${widgetHeight}px`;
+            });
+
+            // Calculate the left translation for widgets container
+            // When widget 4 comes in, widgets 1, 2, 3 should move left by the width of widget 4
+            const leftShift = -widgetWidth * progress;
+            widgetsContainer.style.transform = `translateX(${leftShift}px)`;
+
+            // Toggle tilted class for bars and widget 4
+            if (progress > 0) {
+                container.classList.add('tilted');
+            } else {
+                container.classList.remove('tilted');
+            }
+
+            // Update debug info
+            document.getElementById('progressValue').textContent = (progress * 100).toFixed(1);
+            document.getElementById('stateValue').textContent = progress === 0 ? 'flat' : progress === 1 ? 'upright' : 'transitioning';
+        }
+
+        function calculateProgress(beta) {
+            let progress;
+            if (beta < START_ANGLE) {
+                progress = 0;
+            } else if (beta > END_ANGLE) {
+                progress = 1;
+            } else {
+                progress = (beta - START_ANGLE) / (END_ANGLE - START_ANGLE);
+            }
+            return progress;
+        }
+
+        function handleOrientation(event) {
+            if (manualMode) return; // Don't process sensor data in manual mode
+            
+            const now = Date.now();
+            lastEventTime = now;
+            
+            if (!sensorActive) {
+                sensorActive = true;
+                sensorStatus.textContent = '✓ Sensor active';
+                sensorStatus.className = 'sensor-status success';
+            }
+            
+            // Beta is the front-to-back tilt in degrees
+            let beta = event.beta;
+            let gamma = event.gamma;
+            let alpha = event.alpha;
+
+            // Handle null values
+            if (beta === null || beta === undefined) {
+                sensorStatus.textContent = '✗ Sensor returning null';
+                sensorStatus.className = 'sensor-status error';
+                return;
+            }
+
+            // Normalize beta to positive values
+            beta = Math.abs(beta);
+            
+            // Adjust for different orientations
+            if (beta > 90) {
+                beta = 180 - beta;
+            }
+
+            // Update debug
+            document.getElementById('betaValue').textContent = beta.toFixed(1);
+
+            // Calculate progress based on angle range
+            const progress = calculateProgress(beta);
+            updateUI(progress);
+        }
+
+        // Manual control functions
+        function updateManualControl() {
+            const angle = parseInt(angleSlider.value);
+            manualAngle.textContent = angle;
+            document.getElementById('betaValue').textContent = angle.toFixed(1);
+            
+            const progress = calculateProgress(angle);
+            updateUI(progress);
+        }
+
+        angleSlider.addEventListener('input', updateManualControl);
+
+        switchToSensorBtn.addEventListener('click', () => {
+            if (!sensorActive && typeof DeviceOrientationEvent !== 'undefined') {
+                // Try to activate sensor mode
+                manualMode = false;
+                requestPermission();
+                // Update UI to show sensor mode
+                controlTitle.textContent = 'Sensor Control';
+                manualControlsContent.style.display = 'none';
+                switchToSensorBtn.style.display = 'none';
+                switchToManualBtn.style.display = 'inline-block';
+            } else if (sensorActive) {
+                // Sensor is already active, just switch modes
+                manualMode = false;
+                sensorStatus.textContent = '✓ Sensor active';
+                sensorStatus.className = 'sensor-status success';
+                controlTitle.textContent = 'Sensor Control';
+                manualControlsContent.style.display = 'none';
+                switchToSensorBtn.style.display = 'none';
+                switchToManualBtn.style.display = 'inline-block';
+            } else {
+                alert('Sensors are not available on this device or browser.');
+            }
+        });
+
+        switchToManualBtn.addEventListener('click', () => {
+            manualMode = true;
+            sensorStatus.textContent = 'Manual mode';
+            sensorStatus.className = 'sensor-status';
+            controlTitle.textContent = 'Manual Control';
+            manualControlsContent.style.display = 'block';
+            switchToSensorBtn.style.display = 'inline-block';
+            switchToManualBtn.style.display = 'none';
+        });
+
+        closeManualBtn.addEventListener('click', () => {
+            manualControls.classList.add('hidden');
+            if (manualMode) {
+                reopenControlBtn.style.display = 'block';
+            }
+        });
+
+        reopenControlBtn.addEventListener('click', () => {
+            manualControls.classList.remove('hidden');
+            reopenControlBtn.style.display = 'none';
+        });
+
+        manualBtn.addEventListener('click', () => {
+            manualMode = true;
+            permissionRequest.classList.add('hidden');
+            manualControls.classList.remove('hidden');
+            debug.style.display = 'block';
+            sensorStatus.textContent = 'Manual mode';
+            sensorStatus.className = 'sensor-status';
+            reopenControlBtn.style.display = 'none';
+            updateManualControl();
+        });
+
+        async function requestPermission() {
+            manualMode = false;
+            
+            // Check if DeviceOrientationEvent is supported
+            if (typeof DeviceOrientationEvent === 'undefined') {
+                sensorStatus.textContent = '✗ DeviceOrientation not supported';
+                sensorStatus.className = 'sensor-status error';
+                alert('Device orientation is not supported on this device or browser.');
+                return;
+            }
+
+            sensorStatus.textContent = 'Requesting permission...';
+            sensorStatus.className = 'sensor-status';
+
+            // iOS 13+ requires permission
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                try {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                        permissionRequest.classList.add('hidden');
+                        debug.style.display = 'block';
+                        sensorStatus.textContent = 'Waiting for sensor data...';
+                        
+                        setTimeout(() => {
+                            if (!sensorActive) {
+                                sensorStatus.textContent = '✗ No sensor data received';
+                                sensorStatus.className = 'sensor-status error';
+                                alert('Sensor permission granted but no data received. Try moving your device.');
+                            }
+                        }, 2000);
+                    } else {
+                        sensorStatus.textContent = '✗ Permission denied';
+                        sensorStatus.className = 'sensor-status error';
+                        alert('Permission denied. Please enable in settings or use Manual Control.');
+                    }
+                } catch (error) {
+                    console.error('Error requesting permission:', error);
+                    sensorStatus.textContent = '✗ Error: ' + error.message;
+                    sensorStatus.className = 'sensor-status error';
+                    alert('Error requesting permission: ' + error.message);
+                }
+            } else {
+                // Android and older browsers - no permission needed
+                sensorStatus.textContent = 'Sensor enabled (no permission needed)';
+                sensorStatus.className = 'sensor-status';
+                
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                permissionRequest.classList.add('hidden');
+                debug.style.display = 'block';
+                
+                // Check if sensor is working
+                setTimeout(() => {
+                    if (!sensorActive) {
+                        sensorStatus.textContent = '✗ Sensor not responding';
+                        sensorStatus.className = 'sensor-status error';
+                        alert('Sensor not responding. This might be because:\n\n1. Chrome requires HTTPS for sensors (file:// won\'t work)\n2. Sensor permissions are disabled\n3. Your device doesn\'t support orientation sensors\n\nTry using Manual Control instead!');
+                        manualControls.classList.remove('hidden');
+                        manualMode = true;
+                        reopenControlBtn.style.display = 'none'; // Don't show reopen button initially
+                    }
+                }, 3000);
+            }
+        }
+
+        enableBtn.addEventListener('click', requestPermission);
+
+        // Initialize with flat state
+        updateUI(0);
+
+        // Toggle debug with triple tap
+        let tapCount = 0;
+        let tapTimer;
+        document.addEventListener('click', (e) => {
+            // Don't count clicks on controls
+            if (e.target.closest('.manual-controls') || e.target.closest('.permission-request')) {
+                return;
+            }
+            
+            tapCount++;
+            clearTimeout(tapTimer);
+            tapTimer = setTimeout(() => {
+                if (tapCount === 3) {
+                    debug.style.display = debug.style.display === 'none' ? 'block' : 'none';
+                }
+                tapCount = 0;
+            }, 500);
+        });
+
+        // Monitor sensor health
+        setInterval(() => {
+            if (sensorActive && !manualMode) {
+                const timeSinceLastEvent = Date.now() - lastEventTime;
+                if (timeSinceLastEvent > 2000) {
+                    sensorStatus.textContent = '⚠ Sensor stopped responding';
+                    sensorStatus.className = 'sensor-status error';
+                }
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
